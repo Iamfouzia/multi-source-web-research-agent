@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Optional
+
 from research_agent.config import Settings
 from research_agent.fetcher import fetch_all
 from research_agent.llm_client import GrokClient
@@ -10,6 +13,8 @@ from research_agent.ranker import filter_top, rank_results
 from research_agent.search_runner import run_providers
 from research_agent.synthesizer import synthesize
 
+StageCallback = Callable[[str, Optional[str]], None]
+
 
 class ResearchAgent:
     def __init__(self, settings: Settings):
@@ -20,32 +25,52 @@ class ResearchAgent:
             DuckDuckGoProvider(),
         ]
 
-    def run(self, question: str, top_n: int = 8) -> ResearchAnswer:
+    def run(
+        self,
+        question: str,
+        top_n: int = 8,
+        on_stage: Optional[StageCallback] = None,
+    ) -> ResearchAnswer:
+        def stage(name: str, detail: Optional[str] = None) -> None:
+            if on_stage is not None:
+                try:
+                    on_stage(name, detail)
+                except Exception:
+                    pass
+
+        stage("planning")
         queries = plan_queries(self.llm, question)
 
-        all_outcomes = []
-        for query in queries:
-            all_outcomes.extend(
-                run_providers(
+        stage("searching", f"{len(queries)} sub-quer{'y' if len(queries) == 1 else 'ies'} across {len(self.providers)} providers")
+        with ThreadPoolExecutor(max_workers=max(1, len(queries))) as pool:
+            futures = [
+                pool.submit(
+                    run_providers,
                     self.providers,
                     query,
                     self.settings.max_results_per_provider,
                     self.settings.provider_timeout_seconds,
                     self.settings.max_retries,
                 )
-            )
+                for query in queries
+            ]
+            all_outcomes = []
+            for future in futures:
+                all_outcomes.extend(future.result())
 
         provider_failures = [
             f"{o.provider_name}: {o.error}" for o in all_outcomes if not o.succeeded
         ]
 
+        stage("ranking")
         merged = merge_and_deduplicate(all_outcomes)
         ranked_all = rank_results(merged, question)
         top_ranked = filter_top(ranked_all, top_n)
 
+        stage("reading", f"{len(top_ranked)} pages")
         fetch_all([item.result for item in top_ranked], self.settings.fetch_timeout_seconds, self.settings.max_retries)
 
-        # Re-rank after fetching since full content changes lexical overlap signal.
         top_ranked = rank_results([item.result for item in top_ranked], question)
 
+        stage("synthesizing")
         return synthesize(self.llm, question, top_ranked, provider_failures)

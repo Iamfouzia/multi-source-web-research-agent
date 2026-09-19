@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Research Agent</title>
+  <meta name="description" content="Ask a question. A multi-source research agent searches, reads and cites the web for you.">
+  <meta name="color-scheme" content="light dark">
+
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem("theme"); } catch (e) {}
+      if (t !== "light" && t !== "dark") {
+        t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+
+  <style>
+    
+    :root {
+      --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --ink: #12161c;
+      --ink-2: #4d5665;
+      --line: #dfe3e9;
+      --line-strong: #c3cad4;
+      --accent: #2440d6;
+      --accent-strong: #1a31b0;
+      --accent-soft: #e8ecfc;
+      --accent-ring: rgba(36, 64, 214, 0.18);
+      --on-accent: #ffffff;
+      --warn-ink: #6f4600;
+      --warn-bg: #fff6e0;
+      --warn-line: #ebd39a;
+      --danger-ink: #8a1c1c;
+      --danger-bg: #fdecec;
+      --danger-line: #f0bcbc;
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      --bg: #0e1116;
+      --surface: #161a21;
+      --ink: #e8ebf0;
+      --ink-2: #9aa4b3;
+      --line: #262c36;
+      --line-strong: #3a4250;
+      --accent: #92a4ff;
+      --accent-strong: #b0bdff;
+      --accent-soft: #1c2342;
+      --accent-ring: rgba(146, 164, 255, 0.28);
+      --on-accent: #0e1116;
+      --warn-ink: #ebca7c;
+      --warn-bg: #241e0f;
+      --warn-line: #4a3e1c;
+      --danger-ink: #f3a9a9;
+      --danger-bg: #2a1414;
+      --danger-line: #562828;
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 400 1rem/1.6 var(--sans);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: var(--accent); }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+    .wrap { width: 100%; max-width: 740px; margin-inline: auto; padding-inline: clamp(20px, 5vw, 32px); }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+    .skip {
+      position: absolute; left: 12px; top: -48px; z-index: 10;
+      background: var(--surface); color: var(--ink); padding: 8px 12px;
+      border: 1px solid var(--line-strong); border-radius: 8px; text-decoration: none;
+    }
+    .skip:focus { top: 12px; }
+
+    .top-in { display: flex; align-items: center; justify-content: space-between; padding-block: 20px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 600; }
+    .brand svg { color: var(--accent); }
+    .top nav { display: flex; align-items: center; gap: 6px; }
+    .link-quiet { color: var(--ink-2); text-decoration: none; font-size: 0.9rem; padding: 6px 10px; border-radius: 8px; }
+    .link-quiet:hover { color: var(--ink); background: var(--accent-soft); }
+    .icon-btn {
+      display: inline-grid; place-items: center; width: 36px; height: 36px;
+      background: transparent; border: 0; border-radius: 8px; color: var(--ink-2);
+    }
+    .icon-btn:hover { color: var(--ink); background: var(--accent-soft); }
+    .icon-btn .moon { display: none; }
+    :root[data-theme="dark"] .icon-btn .sun { display: none; }
+    :root[data-theme="dark"] .icon-btn .moon { display: block; }
+
+    main { flex: 1; padding-bottom: 64px; }
+    .intro { padding-top: clamp(28px, 7vw, 64px); }
+    h1 {
+      font: 600 clamp(2rem, 5.2vw, 2.9rem)/1.12 var(--serif);
+      letter-spacing: -0.02em;
+      margin: 0 0 14px;
+      text-wrap: balance;
+    }
+    .lede { margin: 0 0 32px; color: var(--ink-2); font-size: 1.0625rem; max-width: 56ch; }
+
+    .ask {
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .ask:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-ring); }
+    .ask textarea {
+      display: block; width: 100%; resize: none; border: 0; outline: 0; background: transparent;
+      color: var(--ink); padding: 18px 20px 6px;
+      font: 400 1.1875rem/1.5 var(--serif);
+      min-height: 4.6rem; max-height: 220px;
+    }
+    .ask textarea::placeholder { color: var(--ink-2); opacity: 0.75; }
+    .ask textarea:disabled { opacity: 0.7; }
+    .ask-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 10px 20px; }
+    .hint { color: var(--ink-2); font-size: 0.8125rem; }
+    .btn {
+      background: var(--accent); color: var(--on-accent); border: 0; border-radius: 9px;
+      padding: 10px 20px; font-weight: 600; transition: background 0.15s;
+      min-height: 40px;
+    }
+    .btn:hover:not(:disabled) { background: var(--accent-strong); }
+    .btn:disabled { background: var(--line); color: var(--ink-2); cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent; color: var(--ink); border: 1px solid var(--line-strong);
+      border-radius: 9px; padding: 8px 14px; font-weight: 500; font-size: 0.9rem;
+    }
+    .btn-ghost:hover { background: var(--accent-soft); border-color: var(--accent); }
+    .btn-text { background: none; border: 0; padding: 4px 6px; color: var(--ink-2); font-size: 0.875rem; border-radius: 6px; }
+    .btn-text:hover { color: var(--ink); text-decoration: underline; }
+
+    .examples { margin: 28px 0 0; padding: 0; list-style: none; }
+    .examples-title { margin: 28px 0 8px; color: var(--ink-2); font-size: 0.9rem; }
+    .examples button {
+      background: none; border: 0; padding: 6px 0; text-align: left;
+      font: 400 1.0625rem/1.45 var(--serif); color: var(--ink);
+      text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px;
+    }
+    .examples button:hover { color: var(--accent); text-decoration-color: var(--accent); }
+
+    .progress { margin-top: 36px; }
+    .progress-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+    .progress-head h2 { font: 600 1rem/1.3 var(--sans); margin: 0; }
+    .elapsed { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+    .progress-head .btn-text { margin-left: auto; }
+    .stages { list-style: none; margin: 0; padding: 0; }
+    .stage { position: relative; display: grid; grid-template-columns: 24px 1fr; column-gap: 14px; padding-bottom: 20px; }
+    .stage:last-child { padding-bottom: 0; }
+    .stage:not(:last-child)::before {
+      content: ""; position: absolute; left: 11px; top: 26px; bottom: 2px; width: 2px;
+      background: var(--line); transition: background 0.3s;
+    }
+    .stage.is-done:not(:last-child)::before { background: var(--accent); }
+    .marker { position: relative; width: 24px; height: 24px; display: grid; place-items: center; }
+    .marker::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--bg); }
+    .is-active .marker::before {
+      width: 20px; height: 20px; border: 3px solid var(--accent-soft); border-top-color: var(--accent);
+      background: transparent; animation: spin 0.9s linear infinite;
+    }
+    .is-done .marker::before {
+      width: 20px; height: 20px; border: 0; background: var(--accent);
+    }
+    .is-done .marker::after {
+      content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 10px;
+      border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: translate(-50%, -62%) rotate(45deg);
+    }
+    .stage-body { padding-top: 1px; }
+    .stage-label { font-weight: 500; }
+    .is-pending .stage-label { color: var(--ink-2); font-weight: 400; }
+    .stage-desc { display: block; color: var(--ink-2); font-size: 0.875rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error {
+      margin-top: 36px; padding: 16px 18px; border-radius: 12px;
+      background: var(--danger-bg); border: 1px solid var(--danger-line); color: var(--danger-ink);
+    }
+    .error h2 { margin: 0 0 6px; font: 600 1rem/1.4 var(--sans); }
+    .error p { margin: 0 0 12px; }
+    .error code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; background: rgba(127,127,127,0.16); padding: 1px 6px; border-radius: 5px; }
+    .error .btn-ghost { color: inherit; border-color: currentColor; }
+    .error .btn-ghost:hover { background: rgba(127,127,127,0.14); }
+
+    .results { margin-top: 44px; }
+    .section { margin-top: 40px; padding-top: 26px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
+    .section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+    .section > h2 {
+      display: flex; align-items: center; gap: 8px;
+      margin: 0 0 14px; font: 600 0.9375rem/1.3 var(--sans); color: var(--ink-2);
+    }
+    .section > h2:focus { outline: none; }
+    .section > h2 svg { flex: none; }
+
+    .answer { margin: 0; font: 400 1.3125rem/1.65 var(--serif); font-optical-sizing: auto; max-width: 62ch; text-wrap: pretty; }
+    .answer-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; color: var(--ink-2); font-size: 0.875rem; }
+
+    .cite {
+      position: relative; top: -0.32em; margin: 0 0.06em; padding: 0 0.14em;
+      font: 600 0.68em/1 var(--sans); font-variant-numeric: tabular-nums;
+      color: var(--accent); text-decoration: none; border-radius: 4px;
+      transition: background 0.12s;
+    }
+    a.cite:hover, a.cite:focus-visible { background: var(--accent-soft); }
+    span.cite { color: var(--ink-2); }
+
+    .claims { margin: 0; padding-left: 1.25em; max-width: 64ch; font: 400 1.0625rem/1.65 var(--serif); }
+    .claims li { padding-left: 4px; margin-bottom: 10px; }
+    .claims li::marker { color: var(--accent); }
+
+    .refs { list-style: none; margin: 0; padding: 0; }
+    .ref {
+      display: grid; grid-template-columns: 2.4em 1fr; gap: 4px;
+      padding: 10px 12px; margin: 0 -12px; border-radius: 8px;
+      transition: background 0.25s; overflow-wrap: anywhere;
+    }
+    .ref.is-linked, .ref.is-flash { background: var(--accent-soft); }
+    .ref:focus { outline: none; }
+    .ref-n { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 0.9rem; padding-top: 1px; }
+    .ref-title { font-weight: 500; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+    .ref-title:hover { text-decoration-color: currentColor; }
+    .ref-url { display: block; color: var(--ink-2); font-size: 0.8125rem; }
+
+    .notes { list-style: none; margin: 0; padding: 0; max-width: 64ch; }
+    .notes li { padding: 2px 0 2px 16px; margin-bottom: 14px; font: 400 1.0625rem/1.65 var(--serif); border-left: 2px solid var(--line-strong); }
+    .notes.open li { border-left-style: dashed; }
+
+    .notice {
+      margin-top: 40px; padding: 12px 14px; border-radius: 10px;
+      background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink);
+      font-size: 0.9rem; line-height: 1.5;
+    }
+    .notice-row { display: flex; gap: 10px; align-items: flex-start; }
+    .notice-row svg { flex: none; margin-top: 2px; }
+    .notice details { margin-top: 8px; padding-left: 26px; }
+    .notice summary { cursor: pointer; }
+    .notice ul { margin: 8px 0 0; padding-left: 18px; overflow-wrap: anywhere; font-size: 0.8125rem; }
+
+    footer { padding-block: 28px; color: var(--ink-2); font-size: 0.8125rem; border-top: 1px solid var(--line); }
+    footer p { margin: 0; max-width: 60ch; }
+
+    @media (max-width: 560px) {
+      .hint { display: none; }
+      .ask-foot { justify-content: flex-end; }
+      .answer { font-size: 1.1875rem; }
+      .link-quiet { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .is-active .marker::before { animation: none; }
+      * { transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip" href="#question">Skip to question</a>
+
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="./" aria-label="Research Agent, home">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="2.5"/><circle cx="4.5" cy="6" r="1.8"/><circle cx="19.5" cy="6" r="1.8"/><circle cx="12" cy="20" r="1.8"/>
+          <path d="M10 10.6 5.9 7.3M14 10.6l4.1-3.3M12 14.5v3.7"/>
+        </svg>
+        <span>Research Agent</span>
+      </a>
+      <nav aria-label="Site">
+        <a class="link-quiet" href="https://github.com/Iamfouzia/multi-source-web-research-agent" target="_blank" rel="noopener noreferrer">Source code</a>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch to dark theme">
+          <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro">
+      <h1>Ask a question, get an answer you can check.</h1>
+      <p class="lede">The agent searches two independent providers, reads the top pages, and cites every claim it makes.</p>
+    </section>
+
+    <div class="ask">
+      <label class="sr-only" for="question">Research question</label>
+      <textarea id="question" rows="2" maxlength="500" placeholder="Ask anything you want researched" autocomplete="off" spellcheck="true"></textarea>
+      <div class="ask-foot">
+        <span class="hint">Press Enter to research, Shift+Enter for a new line.</span>
+        <button class="btn" id="submit" type="button" disabled>Research</button>
+      </div>
+    </div>
+
+    <div id="examples-wrap">
+      <p class="examples-title">Not sure where to start? Try one of these.</p>
+      <ul class="examples" id="examples" style="margin-top:0"></ul>
+    </div>
+
+    <div class="sr-only" id="status" role="status" aria-live="polite"></div>
+
+    <section class="progress" id="progress" aria-label="Research progress" hidden>
+      <div class="progress-head">
+        <h2>Researching</h2>
+        <span class="elapsed" id="elapsed">0 s</span>
+        <button class="btn-text" id="cancel" type="button">Cancel</button>
+      </div>
+      <ol class="stages" id="stages"></ol>
+    </section>
+
+    <section class="error" id="error" role="alert" hidden>
+      <h2>Couldn't complete the research</h2>
+      <p id="error-msg"></p>
+      <button class="btn-ghost" id="retry" type="button">Try again</button>
+    </section>
+
+    <article class="results" id="results" hidden></article>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>Answers are generated from retrieved web pages and can still be wrong. Open the references to verify anything important.</p>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const API_BASE = String(
+        window.RESEARCH_API_BASE ?? (location.port === "8000" ? "" : "http://localhost:8000")
+      ).replace(/\/$/, "");
+
+      const STAGES = [
+        { id: "planning",     label: "Planning queries",  hint: "Breaking your question into focused searches" },
+        { id: "searching",    label: "Searching sources", hint: "Querying Tavily and DuckDuckGo" },
+        { id: "ranking",      label: "Ranking results",   hint: "Merging duplicates and scoring relevance" },
+        { id: "reading",      label: "Reading pages",     hint: "Fetching the full text of the top results" },
+        { id: "synthesizing", label: "Writing the answer", hint: "Grounding every claim in the evidence" },
+      ];
+
+      const EXAMPLES = [
+        "What are the trade-offs between retrieval-augmented generation and fine-tuning?",
+        "How do vector databases differ from traditional search indexes?",
+        "What is the current state of solid-state battery commercialization?",
+      ];
+
+      const PROVIDER_NAMES = { tavily: "Tavily", duckduckgo: "DuckDuckGo", ddg: "DuckDuckGo" };
+
+      const $ = (id) => document.getElementById(id);
+      const els = {
+        q: $("question"), submit: $("submit"), examples: $("examples"), examplesWrap: $("examples-wrap"),
+        status: $("status"), progress: $("progress"), stages: $("stages"), elapsed: $("elapsed"),
+        cancel: $("cancel"), error: $("error"), errorMsg: $("error-msg"), retry: $("retry"),
+        results: $("results"), theme: $("theme-toggle"),
+      };
+      const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      function el(tag, props = {}, ...kids) {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(props)) {
+          if (v == null || v === false) continue;
+          if (k === "class") node.className = v;
+          else if (k === "text") node.textContent = v;
+          else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+          else node.setAttribute(k, v === true ? "" : v);
+        }
+        for (const kid of kids.flat()) if (kid != null && kid !== false) node.append(kid);
+        return node;
+      }
+
+      const ICONS = {
+        split: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4v4M6 3 3 6m3-3 3 3M18 21l-3-3m3 3 3-3"/></svg>',
+        question: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9M12 17.2h.01"/></svg>',
+        warn: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>',
+      };
+      const icon = (name) => { const s = document.createElement("span"); s.style.display = "inline-flex"; s.innerHTML = ICONS[name]; return s; };
+
+      const asList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()) : []);
+
+      function safeUrl(raw) {
+        try {
+          const u = new URL(raw);
+          return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+        } catch { return null; }
+      }
+      function displayUrl(raw) {
+        try {
+          const u = new URL(raw);
+          const path = u.pathname === "/" ? "" : u.pathname;
+          const text = u.hostname.replace(/^www\./, "") + path;
+          return text.length > 70 ? text.slice(0, 69) + "…" : text;
+        } catch { return raw; }
+      }
+      const hostOf = (raw) => { try { return new URL(raw).hostname.replace(/^www\./, ""); } catch { return raw; } };
+
+      const announce = (msg) => { els.status.textContent = msg; };
+
+      const CITE_RE = /\[(\d+(?:\s*[,;]\s*\d+)*)\]/g;
+      function withCitations(text, refCount) {
+        const frag = document.createDocumentFragment();
+        let last = 0;
+        for (const m of text.matchAll(CITE_RE)) {
+          if (m.index > last) frag.append(text.slice(last, m.index));
+          for (const raw of m[1].split(/\s*[,;]\s*/)) {
+            const n = Number(raw);
+            frag.append(
+              n >= 1 && n <= refCount
+                ? el("a", { class: "cite", href: `#ref-${n}`, "data-ref": n, "aria-label": `Reference ${n}`, text: `[${n}]` })
+                : el("span", { class: "cite", text: `[${n}]` })
+            );
+          }
+          last = m.index + m[0].length;
+        }
+        if (last < text.length) frag.append(text.slice(last));
+        return frag;
+      }
+
+      let state = "idle";
+      let controller = null;
+      let timerId = null;
+      let stageEls = [];
+      let stageDetails = {};
+
+      function setState(next) {
+        state = next;
+        const loading = next === "loading";
+        els.progress.hidden = !loading;
+        els.error.hidden = next !== "error";
+        els.results.hidden = next !== "done";
+        els.examplesWrap.hidden = next === "loading" || next === "done";
+        els.q.disabled = loading;
+        syncSubmit();
+        els.submit.textContent = loading ? "Researching…" : "Research";
+      }
+      function syncSubmit() {
+        els.submit.disabled = state === "loading" || els.q.value.trim().length < 3;
+      }
+
+      function buildStages() {
+        stageDetails = {};
+        stageEls = STAGES.map((s) =>
+          el("li", { class: "stage is-pending", "data-stage": s.id },
+            el("span", { class: "marker", "aria-hidden": "true" }),
+            el("div", { class: "stage-body" },
+              el("span", { class: "stage-label", text: s.label }),
+              el("span", { class: "stage-desc", hidden: true })
+            )
+          )
+        );
+        els.stages.replaceChildren(...stageEls);
+      }
+
+      function setStage(id, detail) {
+        const idx = STAGES.findIndex((s) => s.id === id);
+        if (idx < 0) return;
+        if (detail) stageDetails[id] = detail;
+        stageEls.forEach((li, i) => {
+          const status = i < idx ? "done" : i === idx ? "active" : "pending";
+          li.className = `stage is-${status}`;
+          if (status === "active") li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+          const desc = li.querySelector(".stage-desc");
+          const text = status === "active" ? stageDetails[STAGES[i].id] || STAGES[i].hint
+                     : status === "done" ? stageDetails[STAGES[i].id] || ""
+                     : "";
+          desc.textContent = text;
+          desc.hidden = !text;
+        });
+        announce(`Step ${idx + 1} of ${STAGES.length}: ${STAGES[idx].label}`);
+      }
+
+      function startTimer(t0) {
+        const tick = () => {
+          const s = Math.floor((performance.now() - t0) / 1000);
+          els.elapsed.textContent = s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+        };
+        tick();
+        timerId = setInterval(tick, 500);
+      }
+      const stopTimer = () => { clearInterval(timerId); timerId = null; };
+
+      const fail = (message, kind = "http") => Object.assign(new Error(message), { kind });
+
+      async function httpError(res) {
+        let detail = "";
+        try {
+          const body = await res.json();
+          detail = typeof body.detail === "string" ? body.detail : "";
+          if (res.status === 422) detail = "That question couldn't be processed. Use between 3 and 500 characters.";
+        } catch {  }
+        return fail(detail || `The server responded with an error (HTTP ${res.status}).`);
+      }
+
+      const post = (path, question, signal) =>
+        fetch(`${API_BASE}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+          signal,
+        }).catch((err) => {
+          if (err.name === "AbortError") throw err;
+          throw fail("network", "network");
+        });
+
+      async function readStream(res, onStage) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let result = null;
+
+        const handle = (line) => {
+          if (!line.trim()) return;
+          const evt = JSON.parse(line);
+          if (evt.type === "stage") onStage(evt.stage, evt.detail);
+          else if (evt.type === "result") result = evt.data;
+          else if (evt.type === "error") throw fail(evt.message || "The research run failed on the server.");
+        };
+
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          lines.forEach(handle);
+        }
+        handle(buffer);
+        if (!result) throw fail("The connection closed before the answer arrived. Try again.");
+        return result;
+      }
+
+      function simulateStages(onStage) {
+        const timeline = [["planning", 0], ["searching", 3000], ["ranking", 11000], ["reading", 13500], ["synthesizing", 22000]];
+        const ids = timeline.map(([id, ms]) => setTimeout(() => onStage(id), ms));
+        return () => ids.forEach(clearTimeout);
+      }
+
+      async function runResearch(question, signal, onStage) {
+        const streamRes = await post("/research/stream", question, signal);
+        if (streamRes.ok) return readStream(streamRes, onStage);
+        if (streamRes.status !== 404 && streamRes.status !== 405) throw await httpError(streamRes);
+
+        const stop = simulateStages(onStage);
+        try {
+          const res = await post("/research", question, signal);
+          if (!res.ok) throw await httpError(res);
+          return await res.json();
+        } finally {
+          stop();
+        }
+      }
+
+      function section(title, iconName, ...body) {
+        const h2 = el("h2", { text: title });
+        if (iconName) h2.prepend(icon(iconName));
+        return el("section", { class: "section" }, h2, ...body);
+      }
+
+      function toMarkdown(d, refs) {
+        const out = [d.answer.trim(), ""];
+        if (d.claims.length) out.push("## Key claims", ...d.claims.map((c) => `- ${c}`), "");
+        if (refs.length) out.push("## References", ...refs.map((r, i) => `[${i + 1}] ${r.title} - ${r.url}`), "");
+        if (d.conflicts.length) out.push("## Conflicts", ...d.conflicts.map((c) => `- ${c}`), "");
+        if (d.uncertainties.length) out.push("## Uncertainties", ...d.uncertainties.map((u) => `- ${u}`), "");
+        return out.join("\n").trim() + "\n";
+      }
+
+      async function copyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const ta = el("textarea", { class: "sr-only", "aria-hidden": "true" });
+          ta.value = text;
+          document.body.append(ta);
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+        }
+      }
+
+      function failureNotice(failures) {
+        const counts = new Map();
+        failures.forEach((f) => counts.set(f, (counts.get(f) || 0) + 1));
+        const names = [...new Set(failures.map((f) => f.split(":")[0].trim().toLowerCase()).filter(Boolean))]
+          .map((n) => PROVIDER_NAMES[n] || n.charAt(0).toUpperCase() + n.slice(1));
+        const who = names.length ? new Intl.ListFormat("en", { type: "conjunction" }).format(names) : "A search provider";
+        return el("aside", { class: "notice", "aria-label": "Provider warnings" },
+          el("div", { class: "notice-row" },
+            icon("warn"),
+            el("p", { style: "margin:0", text: `${who} had trouble responding, so this answer may draw on fewer sources than usual.` })
+          ),
+          el("details", {},
+            el("summary", { text: "Show details" }),
+            el("ul", {}, [...counts].map(([msg, n]) => el("li", { text: n > 1 ? `${msg} (${n} times)` : msg })))
+          )
+        );
+      }
+
+      function renderResults(data, seconds) {
+        const refs = (Array.isArray(data.references) ? data.references : [])
+          .filter((r) => r && typeof r === "object")
+          .map((r) => ({ title: String(r.title || "").trim(), url: String(r.url || "") }));
+        const d = {
+          answer: typeof data.answer === "string" ? data.answer : "",
+          claims: asList(data.key_claims),
+          conflicts: asList(data.conflicts),
+          uncertainties: asList(data.uncertainties),
+          failures: asList(data.provider_failures),
+        };
+
+        const parts = [];
+
+        const copyBtn = el("button", { class: "btn-ghost", type: "button", text: "Copy as Markdown" });
+        copyBtn.addEventListener("click", async () => {
+          await copyText(toMarkdown(d, refs));
+          copyBtn.textContent = "Copied";
+          setTimeout(() => (copyBtn.textContent = "Copy as Markdown"), 1800);
+        });
+        const secs = Math.max(1, Math.round(seconds));
+        const meta = `Answered in ${secs} ${secs === 1 ? "second" : "seconds"}` +
+          (refs.length ? ` using ${refs.length} ${refs.length === 1 ? "source" : "sources"}.` : ".");
+        const answerHeading = el("h2", { id: "answer-heading", tabindex: "-1", text: "Answer" });
+        parts.push(
+          el("section", { class: "section" },
+            answerHeading,
+            el("p", { class: "answer" }, d.answer ? withCitations(d.answer, refs.length) : "No answer was produced for this question."),
+            el("div", { class: "answer-foot" }, el("span", { text: meta }), copyBtn)
+          )
+        );
+
+        if (d.claims.length) {
+          parts.push(section("Key claims", null,
+            el("ul", { class: "claims" }, d.claims.map((c) => el("li", {}, withCitations(c, refs.length))))
+          ));
+        }
+
+        if (refs.length) {
+          parts.push(section("References", null,
+            el("ol", { class: "refs" }, refs.map((r, i) => {
+              const href = safeUrl(r.url);
+              const title = r.title || hostOf(r.url);
+              return el("li", { class: "ref", id: `ref-${i + 1}`, tabindex: "-1" },
+                el("span", { class: "ref-n", "aria-hidden": "true", text: `[${i + 1}]` }),
+                el("div", {},
+                  href ? el("a", { class: "ref-title", href, target: "_blank", rel: "noopener noreferrer", text: title })
+                       : el("span", { class: "ref-title", text: title }),
+                  el("span", { class: "ref-url", text: displayUrl(r.url) })
+                )
+              );
+            }))
+          ));
+        }
+
+        if (d.conflicts.length) {
+          parts.push(section("Conflicts between sources", "split",
+            el("ul", { class: "notes" }, d.conflicts.map((c) => el("li", {}, withCitations(c, refs.length))))
+          ));
+        }
+
+        if (d.uncertainties.length) {
+          parts.push(section("Uncertainties and missing evidence", "question",
+            el("ul", { class: "notes open" }, d.uncertainties.map((u) => el("li", {}, withCitations(u, refs.length))))
+          ));
+        }
+
+        if (d.failures.length) parts.push(failureNotice(d.failures));
+
+        els.results.replaceChildren(...parts);
+        return answerHeading;
+      }
+
+      function renderError(err) {
+        els.errorMsg.replaceChildren();
+        if (err.kind === "network") {
+          els.errorMsg.append(
+            `The page can't reach the research server at ${API_BASE || location.origin}. Start it with `,
+            el("code", { text: "uvicorn app:app --reload" }),
+            " and try again."
+          );
+        } else {
+          els.errorMsg.textContent = err.message || "Something went wrong. Try again.";
+        }
+        announce("The research could not be completed.");
+      }
+
+      async function research() {
+        const question = els.q.value.trim();
+        if (question.length < 3 || state === "loading") return;
+
+        controller = new AbortController();
+        buildStages();
+        setState("loading");
+        setStage("planning");
+        els.progress.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "nearest" });
+
+        const t0 = performance.now();
+        startTimer(t0);
+        try {
+          const data = await runResearch(question, controller.signal, setStage);
+          stopTimer();
+          const heading = renderResults(data, (performance.now() - t0) / 1000);
+          setState("done");
+          announce("Research complete.");
+          els.results.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+          heading.focus({ preventScroll: true });
+        } catch (err) {
+          stopTimer();
+          if (err.name === "AbortError") { setState("idle"); announce("Research cancelled."); els.q.focus(); return; }
+          renderError(err);
+          setState("error");
+        }
+      }
+
+      function autosize() {
+        els.q.style.height = "auto";
+        els.q.style.height = `${Math.min(els.q.scrollHeight, 220)}px`;
+      }
+      els.q.addEventListener("input", () => { autosize(); syncSubmit(); });
+      els.q.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); research(); }
+      });
+      els.submit.addEventListener("click", research);
+      els.retry.addEventListener("click", research);
+      els.cancel.addEventListener("click", () => controller && controller.abort());
+
+      EXAMPLES.forEach((text) => {
+        els.examples.append(el("li", {}, el("button", {
+          type: "button", text,
+          onclick: () => { els.q.value = text; autosize(); syncSubmit(); research(); },
+        })));
+      });
+
+      const refFor = (a) => document.getElementById(`ref-${a.dataset.ref}`);
+      els.results.addEventListener("mouseover", (e) => { const a = e.target.closest("a.cite"); if (a) refFor(a)?.classList.add("is-linked"); });
+      els.results.addEventListener("mouseout",  (e) => { const a = e.target.closest("a.cite"); if (a) refFor(a)?.classList.remove("is-linked"); });
+      els.results.addEventListener("focusin",   (e) => { const a = e.target.closest("a.cite"); if (a) refFor(a)?.classList.add("is-linked"); });
+      els.results.addEventListener("focusout",  (e) => { const a = e.target.closest("a.cite"); if (a) refFor(a)?.classList.remove("is-linked"); });
+      els.results.addEventListener("click", (e) => {
+        const a = e.target.closest("a.cite");
+        if (!a) return;
+        e.preventDefault();
+        const target = refFor(a);
+        if (!target) return;
+        target.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "center" });
+        target.focus({ preventScroll: true });
+        target.classList.add("is-flash");
+        setTimeout(() => target.classList.remove("is-flash"), 1600);
+      });
+
+      function syncThemeLabel() {
+        const dark = document.documentElement.dataset.theme === "dark";
+        els.theme.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+      }
+      els.theme.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        try { localStorage.setItem("theme", next); } catch {  }
+        syncThemeLabel();
+      });
+      syncThemeLabel();
+
+      setState("idle");
+      if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) els.q.focus();
+    })();
+  </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
@@ -31,6 +32,8 @@ def fetch_content(result: SearchResult, timeout: int, max_retries: int, char_lim
         result.content = None
 
 
-def fetch_all(results: list[SearchResult], timeout: int, max_retries: int) -> None:
-    for result in results:
-        fetch_content(result, timeout, max_retries)
+def fetch_all(results: list[SearchResult], timeout: int, max_retries: int, max_workers: int = 8) -> None:
+    if not results:
+        return
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(results))) as pool:
+        list(pool.map(lambda result: fetch_content(result, timeout, max_retries), results))
