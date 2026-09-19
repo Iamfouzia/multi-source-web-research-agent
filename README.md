@@ -3,7 +3,7 @@
 A research agent that answers a natural-language question by querying **two independent
 search providers**, merging and deduplicating the results, fetching full page content,
 ranking sources by relevance, and synthesizing a **grounded, citation-backed answer**
-using an LLM — instead of relying on a single search-result-to-answer chain.
+using an LLM  instead of relying on a single search-result-to-answer chain.
 
 Built as part of the **Zephra AI — AI/ML Internship Technical Assessment (Track A)**.
 
