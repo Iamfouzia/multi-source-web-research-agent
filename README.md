@@ -210,7 +210,9 @@ python main.py "your question" --json       # machine-readable output
 The agent can also be used from a browser. The UI is a single HTML file served by a small
 FastAPI wrapper around the same `ResearchAgent` used by the CLI.
 
-![Web UI screenshot](docs/ui-screenshot.png)
+
+<img width="1920" height="960" alt="agent1" src="https://github.com/user-attachments/assets/70d00bb6-1fba-43cd-b8c0-974cdd40f841" />
+<img width="1865" height="962" alt="agent2" src="https://github.com/user-attachments/assets/91de73ce-5a1e-422d-9e23-aad5f69d3ae6" />
 
 **Run it**
 
