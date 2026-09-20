@@ -12,16 +12,16 @@ Built as part of the **Zephra AI — AI/ML Internship Technical Assessment (Trac
 ## 🚀 Features
 
 * 🧠 LLM-based question planning/decomposition into focused sub-queries
-* 🔗 Multi-source retrieval — Tavily + DuckDuckGo (two independent providers)
+* 🔗 Multi-source retrieval Tavily + DuckDuckGo (two independent providers)
 * 🧹 URL normalization, merging, and deduplication across sources
 * 📄 Full-page content fetching for top-ranked candidates
 * 📊 Explainable relevance ranking (lexical overlap + content/domain signals)
 * 📝 Evidence-grounded synthesis with inline `[n]` citations
-* ⚠️ Explicit conflict and uncertainty reporting — no silent guessing
+* ⚠️ Explicit conflict and uncertainty reporting no silent guessing
 * 🔁 Retry-with-backoff and isolated failure handling per provider
 * 🧪 Unit-tested core (merging, ranking, retry logic)
-* 🔐 Environment-variable based credentials — nothing hardcoded or committed
-* 🖥️ Web interface — FastAPI backend and a single-file frontend with live stage-by-stage progress
+* 🔐 Environment-variable based credentials nothing hardcoded or committed
+* 🖥️ Web interface FastAPI backend and a single-file frontend with live stage-by-stage progress
 
 ---
 
@@ -388,6 +388,6 @@ walked through in the accompanying demo video alongside a live run.
 
 ## 📄 Submission
 
-**Project:** Multi-Source Web Research Agent — Zephra AI AI/ML Internship Assessment (Track A)
+**Project:** Multi-Source Web Research Agent 
 
 **GitHub Repository:** https://github.com/Iamfouzia/multi-source-web-research-agent
