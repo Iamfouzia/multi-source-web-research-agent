@@ -5,7 +5,7 @@ search providers**, merging and deduplicating the results, fetching full page co
 ranking sources by relevance, and synthesizing a **grounded, citation-backed answer**
 using an LLM  instead of relying on a single search-result-to-answer chain.
 
-Built as part of the **Zephra AI — AI/ML Internship Technical Assessment (Track A)**.
+Built as part of the **Zephra AI — AI/ML Internship Technical Assessment**.
 
 ---
 
@@ -115,12 +115,12 @@ embedding-based approach without touching retrieval or synthesis.
 
 **Why these choices:**
 
-- **Tavily + DuckDuckGo** — two providers with different indexing and ranking behavior,
+- **Tavily + DuckDuckGo**  two providers with different indexing and ranking behavior,
   reducing the chance both miss the same evidence. Tavily is tuned for LLM-oriented
   search quality; DuckDuckGo adds a free, independent second signal.
-- **Groq** — fast, free-tier LLM inference via an OpenAI-compatible API, used purely for
+- **Groq**  fast, free-tier LLM inference via an OpenAI-compatible API, used purely for
   planning and synthesis, never as the source of factual claims.
-- **No agent framework** (e.g. LangChain) — the pipeline is a fixed, well-understood
+- **No agent framework** (e.g. LangChain)  the pipeline is a fixed, well-understood
   sequence of stages, so an explicit orchestrator (`agent.py`) is easier to debug and has
   no hidden prompt/tool-call behavior to reason about.
 
@@ -320,7 +320,7 @@ require live API keys this is demonstrated in the demo video.
 - **Ranking**  relevance is scored by lexical token overlap between the query and the
   result's title/snippet/content, with a bonus for successfully fetched full content and
   a penalty for known low-signal domains. This is intentionally simple and explainable
-  rather than a black-box embedding score — the ranking reason is stored alongside each
+  rather than a black-box embedding score the ranking reason is stored alongside each
   score.
 - **Conflict/uncertainty handling**  the synthesizer's prompt explicitly instructs the
   LLM to report contradictions between sources and any question aspects the evidence
