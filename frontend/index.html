@@ -154,6 +154,26 @@
     .btn-text { background: none; border: 0; padding: 4px 6px; color: var(--ink-2); font-size: 0.875rem; border-radius: 6px; }
     .btn-text:hover { color: var(--ink); text-decoration: underline; }
 
+    .history { margin-top: 28px; }
+    .history summary { cursor: pointer; color: var(--ink-2); font-size: 0.9rem; padding: 4px 0; width: fit-content; }
+    .history summary:hover { color: var(--ink); }
+    .history ul { list-style: none; margin: 10px 0 0; padding: 0; }
+    .history li { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+    .history li:first-child { border-top: 0; }
+    .hist-open {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+      background: none; border: 0; padding: 10px 0; text-align: left; color: var(--ink);
+    }
+    .hist-q { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 1.0625rem/1.4 var(--serif); }
+    .hist-open:hover .hist-q { color: var(--accent); }
+    .hist-meta { font-size: 0.8125rem; color: var(--ink-2); }
+    .hist-del {
+      flex: none; width: 32px; height: 32px; display: grid; place-items: center;
+      background: none; border: 0; border-radius: 8px; color: var(--ink-2); font-size: 1.25rem; line-height: 1;
+    }
+    .hist-del:hover { color: var(--danger-ink); background: var(--danger-bg); }
+    .history-foot { margin-top: 4px; }
+
     .examples { margin: 28px 0 0; padding: 0; list-style: none; }
     .examples-title { margin: 28px 0 8px; color: var(--ink-2); font-size: 0.9rem; }
     .examples button {
@@ -313,6 +333,12 @@
       </div>
     </div>
 
+    <details class="history" id="history" hidden>
+      <summary id="history-count">Recent questions</summary>
+      <ul id="history-list"></ul>
+      <div class="history-foot"><button class="btn-text" id="history-clear" type="button">Clear history</button></div>
+    </details>
+
     <div id="examples-wrap">
       <p class="examples-title">Not sure where to start? Try one of these.</p>
       <ul class="examples" id="examples" style="margin-top:0"></ul>
@@ -371,6 +397,7 @@
       const $ = (id) => document.getElementById(id);
       const els = {
         q: $("question"), submit: $("submit"), examples: $("examples"), examplesWrap: $("examples-wrap"),
+        history: $("history"), historyList: $("history-list"), historyCount: $("history-count"), historyClear: $("history-clear"),
         status: $("status"), progress: $("progress"), stages: $("stages"), elapsed: $("elapsed"),
         cancel: $("cancel"), error: $("error"), errorMsg: $("error-msg"), retry: $("retry"),
         results: $("results"), theme: $("theme-toggle"),
@@ -443,13 +470,85 @@
       let stageEls = [];
       let stageDetails = {};
 
+      const HISTORY_KEY = "research-history-v1";
+      const HISTORY_MAX = 15;
+
+      function loadSaved() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+          return Array.isArray(raw)
+            ? raw.filter((e) => e && typeof e.id === "string" && typeof e.question === "string" && e.data && typeof e.data === "object")
+            : [];
+        } catch { return []; }
+      }
+      let savedRuns = loadSaved();
+
+      function persistSaved() {
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(savedRuns)); } catch {}
+      }
+
+      const formatWhen = (ts) =>
+        new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
+      function renderSaved() {
+        els.historyCount.textContent = `Recent questions (${savedRuns.length})`;
+        els.historyList.replaceChildren(...savedRuns.map((e) => {
+          const n = Array.isArray(e.data.references) ? e.data.references.length : 0;
+          return el("li", {},
+            el("button", { class: "hist-open", type: "button", onclick: () => openSaved(e.id) },
+              el("span", { class: "hist-q", text: e.question }),
+              el("span", { class: "hist-meta", text: `${n} ${n === 1 ? "source" : "sources"}, ${formatWhen(e.savedAt)}` })
+            ),
+            el("button", { class: "hist-del", type: "button", "aria-label": `Delete "${e.question}" from history`, onclick: () => removeSaved(e.id), text: "×" })
+          );
+        }));
+      }
+
+      function addSaved(question, data, seconds) {
+        if (typeof data.answer !== "string" || !data.answer.trim()) return;
+        const key = question.toLowerCase();
+        savedRuns = savedRuns.filter((e) => e.question.toLowerCase() !== key);
+        savedRuns.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, question, data, seconds, savedAt: Date.now() });
+        savedRuns = savedRuns.slice(0, HISTORY_MAX);
+        persistSaved();
+        renderSaved();
+      }
+
+      function removeSaved(id) {
+        savedRuns = savedRuns.filter((e) => e.id !== id);
+        persistSaved();
+        renderSaved();
+        syncHistoryVisibility();
+      }
+
+      function openSaved(id) {
+        if (state === "loading") return;
+        const entry = savedRuns.find((e) => e.id === id);
+        if (!entry) return;
+        els.q.value = entry.question;
+        autosize();
+        const heading = renderResults(entry.data, entry.seconds, entry.savedAt);
+        setState("done");
+        announce("Showing a saved result.");
+        els.results.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+        heading.focus({ preventScroll: true });
+      }
+
+      function syncHistoryVisibility() {
+        const has = savedRuns.length > 0;
+        els.history.hidden = !has || state === "loading";
+        els.examplesWrap.hidden = state === "loading" || state === "done" || has;
+      }
+
       function setState(next) {
         state = next;
         const loading = next === "loading";
         els.progress.hidden = !loading;
         els.error.hidden = next !== "error";
         els.results.hidden = next !== "done";
-        els.examplesWrap.hidden = next === "loading" || next === "done";
+        syncHistoryVisibility();
+        if (next === "idle" || next === "error") els.history.open = true;
+        else if (next === "done") els.history.open = false;
         els.q.disabled = loading;
         syncSubmit();
         els.submit.textContent = loading ? "Researching…" : "Research";
@@ -617,7 +716,7 @@
         );
       }
 
-      function renderResults(data, seconds) {
+      function renderResults(data, seconds, savedAt) {
         const refs = (Array.isArray(data.references) ? data.references : [])
           .filter((r) => r && typeof r === "object")
           .map((r) => ({ title: String(r.title || "").trim(), url: String(r.url || "") }));
@@ -638,7 +737,8 @@
           setTimeout(() => (copyBtn.textContent = "Copy as Markdown"), 1800);
         });
         const secs = Math.max(1, Math.round(seconds));
-        const meta = `Answered in ${secs} ${secs === 1 ? "second" : "seconds"}` +
+        const meta = (savedAt ? `Saved on ${formatWhen(savedAt)}. ` : "") +
+          `Answered in ${secs} ${secs === 1 ? "second" : "seconds"}` +
           (refs.length ? ` using ${refs.length} ${refs.length === 1 ? "source" : "sources"}.` : ".");
         const answerHeading = el("h2", { id: "answer-heading", tabindex: "-1", text: "Answer" });
         parts.push(
@@ -719,7 +819,9 @@
         try {
           const data = await runResearch(question, controller.signal, setStage);
           stopTimer();
-          const heading = renderResults(data, (performance.now() - t0) / 1000);
+          const seconds = (performance.now() - t0) / 1000;
+          addSaved(question, data, seconds);
+          const heading = renderResults(data, seconds);
           setState("done");
           announce("Research complete.");
           els.results.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
@@ -743,6 +845,15 @@
       els.submit.addEventListener("click", research);
       els.retry.addEventListener("click", research);
       els.cancel.addEventListener("click", () => controller && controller.abort());
+
+      els.historyClear.addEventListener("click", () => {
+        if (!window.confirm("Remove all saved questions from this browser?")) return;
+        savedRuns = [];
+        persistSaved();
+        renderSaved();
+        syncHistoryVisibility();
+      });
+      renderSaved();
 
       EXAMPLES.forEach((text) => {
         els.examples.append(el("li", {}, el("button", {
