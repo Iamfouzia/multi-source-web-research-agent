@@ -212,6 +212,8 @@ FastAPI wrapper around the same `ResearchAgent` used by the CLI.
 
 <img width="1887" height="962" alt="Screenshot (3077)" src="https://github.com/user-attachments/assets/4c8f714e-2d28-49e7-a5eb-0bc846bb5bca" />
 <img width="1894" height="967" alt="Screenshot (3078)" src="https://github.com/user-attachments/assets/27d11d2f-47cf-427c-8abc-c2022a94054e" />
+<img width="1890" height="956" alt="Screenshot (3079)" src="https://github.com/user-attachments/assets/59905862-c63f-429b-8a00-28185327da2d" />
+<img width="1903" height="967" alt="Screenshot (3080)" src="https://github.com/user-attachments/assets/f7b3d05b-d8c2-4611-bfd1-d6c728ab5eb2" />
 <img width="1920" height="960" alt="agent1" src="https://github.com/user-attachments/assets/70d00bb6-1fba-43cd-b8c0-974cdd40f841" />
 <img width="1865" height="962" alt="agent2" src="https://github.com/user-attachments/assets/91de73ce-5a1e-422d-9e23-aad5f69d3ae6" />
 
@@ -305,55 +307,55 @@ python -m pytest tests/ -v
 Tests cover the deterministic core: URL normalization/deduplication, lexical ranking and
 filtering, and retry-with-backoff behavior. LLM and network-dependent modules (providers,
 synthesizer) are exercised end-to-end via the CLI rather than unit tests, since they
-require live API keys — this is demonstrated in the demo video.
+require live API keys this is demonstrated in the demo video.
 
 ---
 
 ## 🧠 Key Engineering Decisions
 
-- **Deduplication** — URLs are normalized (scheme + host + path, lowercased, trailing
+- **Deduplication**  URLs are normalized (scheme + host + path, lowercased, trailing
   slash stripped, query/fragment dropped) before comparison. When two providers return
   the same URL, the result with the longer snippet is kept, since it carries more usable
   evidence for ranking.
-- **Ranking** — relevance is scored by lexical token overlap between the query and the
+- **Ranking**  relevance is scored by lexical token overlap between the query and the
   result's title/snippet/content, with a bonus for successfully fetched full content and
   a penalty for known low-signal domains. This is intentionally simple and explainable
   rather than a black-box embedding score — the ranking reason is stored alongside each
   score.
-- **Conflict/uncertainty handling** — the synthesizer's prompt explicitly instructs the
+- **Conflict/uncertainty handling**  the synthesizer's prompt explicitly instructs the
   LLM to report contradictions between sources and any question aspects the evidence
   doesn't cover, returned as separate `conflicts` and `uncertainties` fields rather than
   folded into prose.
-- **Hallucination reduction** — the synthesis prompt restricts the LLM to the numbered
+- **Hallucination reduction**  the synthesis prompt restricts the LLM to the numbered
   evidence block only, requires inline `[n]` citations, and forces valid-JSON output so
   answers can be programmatically checked against the reference list. When a fetched
   page yields low-quality content (navigation text, cookie banners), the LLM is
   instructed to fall back to the provider's search snippet instead.
-- **Failure handling** — each provider call is wrapped individually; one provider
+- **Failure handling**  each provider call is wrapped individually; one provider
   failing (timeout, rate limit, bad response) does not stop the pipeline — its error is
   recorded and surfaced in the final output as `provider_failures`. `call_with_retries`
   applies exponential backoff to both provider calls and page fetches. If synthesis
   itself fails, the agent falls back to returning the raw ranked evidence rather than
   crashing.
-- **Live progress without coupling** — `ResearchAgent.run()` accepts an optional
+- **Live progress without coupling**  `ResearchAgent.run()` accepts an optional
   `on_stage` callback that reports each pipeline stage. The agent stays unaware of HTTP,
   and the web layer turns those callbacks into a streamed response. A failing callback
   is swallowed so progress reporting can never break a research run.
-- **Credentials** — all keys are read from environment variables via `config.py`; `.env`
+- **Credentials** all keys are read from environment variables via `config.py`; `.env`
   is git-ignored, and `.env.example` documents required variables without real values.
 
 ---
 
 ## ⚠️ Known Limitations
 
-- Ranking is lexical, not semantic — synonyms or paraphrased evidence may score lower
+- Ranking is lexical, not semantic synonyms or paraphrased evidence may score lower
   than a true embedding-based approach would.
 - Page fetching does a basic HTML-tag strip, not full readability extraction, so
   JS-rendered pages or heavy boilerplate can reduce content quality (mitigated by
   falling back to the search snippet during synthesis).
 - DuckDuckGo's unofficial search endpoint (via `ddgs`) can be rate-limited more
   aggressively than a paid API; retries mitigate but don't eliminate this.
-- No caching layer — repeated identical questions re-run the full pipeline.
+- No caching layer repeated identical questions re-run the full pipeline.
 - No automated evaluation harness for answer quality (only unit tests for the
   deterministic modules: merging, ranking, retry logic).
 - The web layer has no authentication or rate limiting and is intended for local demos.
